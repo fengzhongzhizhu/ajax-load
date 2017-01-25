@@ -1,0 +1,258 @@
+    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">  
+    <html xmlns="http://www.w3.org/1999/xhtml">  
+    <head>  
+        <title>滚动到页面顶部加载</title>  
+        <script src="js/jquery-1.11.1.min.js" type="text/javascript"></script>  
+        <script src="js/endlesspage.js" type="text/javascript"></script>  
+         <style type="text/css">  
+                .mainDiv {  
+                    width: 800px;  
+                    border: solid 1px #f00;  
+                    padding: 10px;  
+                }  
+      
+                .item {  
+                    width: 600px;  
+                    height: 50px;  
+                    border: solid 1px #00ff90;  
+                    font-size: 12px;  
+                    margin: 10px;  
+                }  
+      
+                .title {  
+                    font-size: 16px;  
+                    line-height: 20px;  
+                }  
+      
+                .content {  
+                    line-height: 14px;  
+                }  
+                .alink  
+                {  
+                    display:none;  
+                }  
+                .loaddiv  
+                {  
+                   display:none;   
+                }  
+         </style>  
+    </head>  
+    <body>  
+        <h1>滚动测试</h1>  
+        <div class="mainDiv">  
+            <!--<div class="item">  
+                <div class="title">title</div>  
+                <div class="content">content content content content content content content</div>  
+            </div>  
+            -->  
+        </div>  
+        <div class="loaddiv">  
+            <img src="images/loading.gif" />  
+        </div>  
+        <div>  
+            <a href="javascript:void(0);" id="btn_Page" class="alink">查看更多>>></a>  
+        </div>  
+    </body>  
+    </html>  
+////////////////js代码/////////////////////
+    /*endlesspage.js*/  
+    var gPageSize = 10;  
+    var i = 1; //设置当前页数，全局变量  
+    $(function () {  
+        //根据页数读取数据  
+        function getData(pagenumber) {  
+            i++; //页码自动增加，保证下次调用时为新的一页。  
+            $.get("/ajax/Handler.ashx", { pagesize: gPageSize, pagenumber: pagenumber }, function (data) {  
+                if (data.length > 0) {  
+                    var jsonObj = JSON.parse(data);  
+                    insertDiv(jsonObj);  
+                }  
+            });  
+            $.ajax({  
+                type: "post",  
+                url: "/ajax/Handler.ashx",  
+                data: { pagesize: gPageSize, pagenumber: pagenumber },  
+                dataType: "json",  
+                success: function (data) {  
+                    $(".loaddiv").hide();  
+                    if (data.length > 0) {  
+                        var jsonObj = JSON.parse(data);  
+                        insertDiv(jsonObj);  
+                    }  
+                },  
+                beforeSend: function () {  
+                    $(".loaddiv").show();  
+                },  
+                error: function () {  
+                    $(".loaddiv").hide();  
+                }  
+            });  
+        }  
+        //初始化加载第一页数据  
+        getData(1);  
+      
+        //生成数据html,append到div中  
+        function insertDiv(json) {  
+            var $mainDiv = $(".mainDiv");  
+            var html = '';  
+            for (var i = 0; i < json.length; i++) {  
+                html += '<div class="item">';  
+                html += ' <div class="title">' + json[i].rowId + '   ' + json[i].D_Name + '</div>';  
+                html += ' <div class="content">' + json[i].D_Name + '   ' + json[i].D_Password + '</div>';  
+                html += '</div>';  
+            }  
+            $mainDiv.append(html);  
+        }  
+      
+        //==============核心代码=============  
+        var winH = $(window).height(); //页面可视区域高度   
+      
+        var scrollHandler = function () {  
+            var pageH = $(document.body).height();  
+            var scrollT = $(window).scrollTop(); //滚动条top   
+            var aa = (pageH - winH - scrollT) / winH;  
+            if (aa < 0.02) {//0.02是个参数  
+                if (i % 10 === 0) {//每10页做一次停顿！  
+                    getData(i);  
+                    $(window).unbind('scroll');  
+                    $("#btn_Page").show();  
+                } else {  
+                    getData(i);  
+                    $("#btn_Page").hide();  
+                }  
+            }  
+        }  
+        //定义鼠标滚动事件  
+        $(window).scroll(scrollHandler);  
+        //==============核心代码=============  
+      
+        //继续加载按钮事件  
+        $("#btn_Page").click(function () {  
+            getData(i);  
+            $(window).scroll(scrollHandler);  
+        });  
+    });  
+
+
+///////////后台代码///////////////////////
+
+
+    <%@ WebHandler Language="C#" Class="Handler" %>  
+      
+    using System;  
+    using System.Web;  
+    using System.Data;  
+    using MSCL;  
+    using Newtonsoft.Json;  
+      
+    public class Handler : IHttpHandler {  
+      
+        public void ProcessRequest(HttpContext context)  
+        {  
+            //核心处理程序  
+            string pageSize = context.Request["pagesize"];  
+            string pageIndex = context.Request["pagenumber"];  
+            if (string.IsNullOrEmpty(pageSize) || string.IsNullOrEmpty(pageIndex))  
+            {  
+                context.Response.Write("");  
+            }  
+            else  
+            {  
+                //请结合实际自行取分页数据，可调用分页存储过程  
+                MSCL.PageHelper p = new PageHelper();  
+                p.CurrentPageIndex = Convert.ToInt32(pageIndex);  
+                p.FieldsName = "*";  
+                p.KeyField = "d_id";  
+                p.SortName = "d_id asc";  
+                p.TableName = "testtable";  
+                p.EndCondition = "count(*)";  
+                p.PageSize = Convert.ToInt32(pageSize);  
+                DataTable dt = p.QueryPagination();  
+                string json = JsonConvert.SerializeObject(dt, Formatting.Indented);  
+                context.Response.Write(json);  
+            }  
+        }  
+       
+        public bool IsReusable {  
+            get {  
+                return false;  
+            }  
+        }  
+      
+    }  
+
+[html] view plain copy
+print?
+
+    [  
+      {  
+        "rowId": 1,  
+        "D_Id": 1,  
+        "D_Name": "名称1",  
+        "D_Password": "密码测试1",  
+        "D_Else": "其他1"  
+      },  
+      {  
+        "rowId": 2,  
+        "D_Id": 2,  
+        "D_Name": "名称2",  
+        "D_Password": "密码测试2",  
+        "D_Else": "其他2"  
+      },  
+      {  
+        "rowId": 3,  
+        "D_Id": 3,  
+        "D_Name": "名称3",  
+        "D_Password": "密码测试3",  
+        "D_Else": "其他3"  
+      },  
+      {  
+        "rowId": 4,  
+        "D_Id": 4,  
+        "D_Name": "名称4",  
+        "D_Password": "密码测试4",  
+        "D_Else": "其他4"  
+      },  
+      {  
+        "rowId": 5,  
+        "D_Id": 5,  
+        "D_Name": "名称5",  
+        "D_Password": "密码测试5",  
+        "D_Else": "其他5"  
+      },  
+      {  
+        "rowId": 6,  
+        "D_Id": 6,  
+        "D_Name": "名称6",  
+        "D_Password": "密码测试6",  
+        "D_Else": "其他6"  
+      },  
+      {  
+        "rowId": 7,  
+        "D_Id": 7,  
+        "D_Name": "名称7",  
+        "D_Password": "密码测试7",  
+        "D_Else": "其他7"  
+      },  
+      {  
+        "rowId": 8,  
+        "D_Id": 8,  
+        "D_Name": "名称8",  
+        "D_Password": "密码测试8",  
+        "D_Else": "其他8"  
+      },  
+      {  
+        "rowId": 9,  
+        "D_Id": 9,  
+        "D_Name": "名称9",  
+        "D_Password": "密码测试9",  
+        "D_Else": "其他9"  
+      },  
+      {  
+        "rowId": 10,  
+        "D_Id": 10,  
+        "D_Name": "名称10",  
+        "D_Password": "密码测试10",  
+        "D_Else": "其他10"  
+      }  
+    ]              
